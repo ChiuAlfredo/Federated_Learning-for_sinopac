@@ -50,7 +50,7 @@ for _train in outputs.values():
     train_combined = np.hstack((train_combined, _train))
 
 comp_server = MLPClassifier(
-    hidden_layer_sizes=(500, 500,), learning_rate_init=0.001, verbose=True
+    hidden_layer_sizes=(500, 500,), learning_rate_init=0.0001, verbose=True
 )
 comp_server.fit(train_combined, y_train)
 
@@ -62,8 +62,7 @@ train_acc_combined = accuracy_score(pred_train_combined, y_train)
 for i, acc in accuracies.items():
     print(f"Holder {i} train accuracy: {acc:.3f}%")
 
-print(f" ##########decentralized Combined accuracy: {100*train_acc_combined:.3f}%###")
-
+print(f"\033[31m\tdecentralized Combined accuracy: {100*train_acc_combined:.3f}%\033[0m")
 
 #%%
 # centralized
@@ -96,6 +95,6 @@ pred_train = lr.predict(x_train)
 pred_test = lr.predict(x_test)
 
 train_acc = accuracy_score(pred_train, y_train)
-print(f"#######centralized Train accuracy: {100*train_acc:.3f}%###")
+print(f"\033[31m\tcentralized Train accuracy: {100*train_acc:.3f}%\033[0m")
 
 # %%
