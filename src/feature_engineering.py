@@ -4,7 +4,7 @@ Functions to create a useable dataset from the raw titanic data
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
-
+from sklearn.model_selection import train_test_split
 
 def _bin_age(value):
     if np.isnan(value):
@@ -66,15 +66,17 @@ def get_datasets(df, df_test):
     df_combined = clean(df_combined)
     df_combined = create_features(df_combined)
 
+    # Split back into train and test
     df = df_combined.loc[df_combined.Survived.notnull()]
-    df_test = df_combined.loc[df_combined.Survived.isna()]
+    train_data, test_data = train_test_split(df, test_size=0.2)
 
-    train_y = df["Survived"].values
-    train_x = df.drop("Survived", axis=1)
+    train_y = train_data["Survived"].values
+    train_x = train_data.drop("Survived", axis=1)
 
-    test_x = df_test.drop("Survived", axis=1)
+    test_x = test_data.drop("Survived", axis=1)
+    test_y = test_data["Survived"].values
 
-    return train_x, train_y, test_x
+    return train_x, train_y, test_x, test_y
 
 
 def scale(train, test):
