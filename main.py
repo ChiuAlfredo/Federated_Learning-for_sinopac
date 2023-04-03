@@ -23,143 +23,64 @@ import math
 import uuid
 import random
 import zipfile
-
-# %%
-# 下載資料
-
-!wget https://archive.ics.uci.edu/ml/machine-learning-databases/00573/SouthGermanCredit.zip
-with zipfile.ZipFile('SouthGermanCredit.zip', 'r') as zip_ref:
-    zip_ref.extractall('./SouthGermanCredit/')
-# %%
-# 清理資料
-original_df = pd.read_csv('./SouthGermanCredit/SouthGermanCredit.asc', sep=' ')
-original_df.describe()
-id = pd.Series(range(0,1000)).apply(lambda i : str(uuid.uuid4()))
-df_with_id = original_df.copy()
-df_with_id['id'] = id
-df_with_id = df_with_id.set_index('id')
-
-client1_data = df_with_id[['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit','kredit']]
-client2_data = df_with_id.drop(['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit'], axis=1)
-
-# 切割資料
-client1_train, client1_test = train_test_split(client1_data, test_size=0.2, random_state=0)
-client2_train, client2_test = train_test_split(client2_data, test_size=0.2, random_state=0)
-client1_test['kredit']
-def split_x_y(data_train,data_test):
-    train_y = data_train["kredit"]
-    train_x = data_train.drop("kredit", axis=1)
-
-    test_x = data_test.drop("kredit", axis=1)
-    test_y = data_test["kredit"]
-
-    return train_x, train_y, test_x, test_y
-
-client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test)
-client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test)
-
-
-
-common_train_index = client1_train.index.intersection(client2_train.index)
-common_test_index = client1_test.index.intersection(client2_test.index)
-
-print(
-    'There are {} common entries (out of {}) in client 1 and client 2\'s training datasets,\nand {} common entries (out of {}) in their test datasets'
-    .format(
-        len(common_train_index),
-        len(client1_train),
-        len(common_test_index),
-        len(client1_test)))
-# %%
-#vfl
-# %%
-# 設定參數
-batch_size = 32
-learning_rate = 1e-3
-epochs = 10
-
-# Instantiate an optimizer.
-optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
-# Instantiate a loss function.
-# Not from logits because of the softmax layer converting logits to probability.
-loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
-# Instantiate a metric function (accuracy)
-train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 #%%
-# 預測準確率圖
-def plot_loss(loss, accuracy):
-  plt.plot(loss, label='loss')
-  plt.plot(accuracy, label='accuracy')
-  plt.xlabel('Epoch')
-  # plt.ylabel('Error')
-  plt.legend()
-  plt.grid(True)
+# 分割x and y
+def split_x_y(data_train,data_test):
 
-def plot_accuracy(predictions, answers, threshold):
-  tp, tn, fp, fn = 0, 0, 0, 0
+  train_y = data_train["kredit"]
+  train_x = data_train.drop("kredit", axis=1)
 
-  for x in range(len(predictions)):
-    if answers[x] == 1:
-      # if np.argmax(predictions[x]) == 1:
-      if predictions[x][1] >= threshold:
-        tp = tp + 1
-      else:
-        fn = fn + 1
-    else:
-      # if np.argmax(predictions[x]) == 0:
-      if predictions[x][1] < threshold:
-        tn = tn + 1
-      else:
-        fp = fp + 1
-  
-  accuracy = (tp + tn)/(tp + fp + fn + tn)
-  precision = tp / (tp + fp)
-  recall = tp / (tp + fn)
-  specificity = tn / (tn + fp)
-  print("Accuracy: " + str(accuracy))
-  print("Precision: " + str(precision))
-  print("Recall: " + str(recall))
-  # print("Specificity: " + str(specificity))
-  print("F-Measure: " + str(2*(recall * precision) / (recall + precision)))
+  test_x = data_test.drop("kredit", axis=1)
+  test_y = data_test["kredit"]
 
-def convert_to_non_sparse(sparse):
-  vector_list = np.zeros((len(sparse), 2))
-  for x in range(len(sparse)):
-    vector_list[x] = [1 - sparse[x], sparse[x]]
-  return vector_list
+  return train_x, train_y, test_x, test_y
+
+# 
+def add_id(original_df):
+  id = pd.Series(range(0,1000)).apply(lambda i : str(uuid.uuid4()))
+  df_with_id = original_df.copy()
+  df_with_id['id'] = id
+  df_with_id = df_with_id.set_index('id')
+
+  return df_with_id
+
+def split_columns(df_with_id):
+  # 分割欄位
+  client1_data = df_with_id[['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit','kredit']]
+  client2_data = df_with_id.drop(['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit'], axis=1)
+
+  # 切割資料
+  client1_train, client1_test = train_test_split(client1_data, test_size=0.2, random_state=0)
+  client2_train, client2_test = train_test_split(client2_data, test_size=0.2, random_state=0)
+  client1_test['kredit']
+
+  # 切割x,y
+  client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test)
+  client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test)
+
+  # 找出共同的index
+  common_train_index = client1_train.index.intersection(client2_train.index)
+  common_test_index = client1_test.index.intersection(client2_test.index)
+
+  return client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x,client2_train_y, client2_test_x, client2_test_y, common_train_index, common_test_index
+#%%
+# model
+# normalize data
+def normalize_data(data):
+  normalizer = tf.keras.layers.Normalization()
+  normalizer.adapt(np.array(data))
+  return normalizer
 #%%
 #client
 class Client:
 
-  def __init__(self, train_data_x,train_data_y, test_data_x,test_data_y, labelled):
-    # self.__trainX = train_data.copy()
-    # self.__testX = test_data.copy()
-    # self.labelled = labelled
-
-    # if (labelled):
-    #   self.__trainY = self.__trainX.pop('kredit')
-    #   self.__testY = self.__testX.pop('kredit')
-
-    # normalizer = tf.keras.layers.Normalization()
-    # normalizer.adapt(np.array(self.__trainX.loc[common_train_index]))
+  def __init__(self, train_data_x,train_data_y, test_data_x,test_data_y, labelled,model):
     self.__trainX = train_data_x.copy()
     self.__testX = test_data_x.copy()
     self.labelled = labelled
     self.__trainY = train_data_y.copy()
     self.__testY = test_data_y.copy()
-    normalizer = tf.keras.layers.Normalization()
-    normalizer.adapt(np.array(self.__trainX.loc[common_train_index]))
-
-
-
-    self.model = tf.keras.Sequential([
-      normalizer,
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(2),
-      layers.Softmax()])
+    self.model = model
     
   def next_batch(self, index):
     self.batchX = self.__trainX.loc[index]
@@ -228,12 +149,115 @@ class Client:
     for i in range(len(self.c)):
       partial_grads[i] = [x * self.c[i] for x in partial_grads[i]]
     return [sum(x) for x in zip(*partial_grads)]
+# 畫圖
+# roc curve
+def draw_roc_curve(fpr, tpr, label=None):
+  plt.title('Receiver Operating Characteristic')
+  plt.plot(fpr, tpr, color = 'orange', label = 'AUC = %0.2f' % auc1)
+  plt.legend(loc = 'lower right')
+  plt.plot([0, 1], [0, 1],'r--')
+  plt.xlim([0, 1])
+  plt.ylim([0, 1])
+  plt.ylabel('True Positive Rate')
+  plt.xlabel('False Positive Rate')
+  plt.show()  
+# 訓練圖
+def plot_loss(loss, accuracy):
+  plt.plot(loss, label='loss')
+  plt.plot(accuracy, label='accuracy')
+  plt.xlabel('Epoch')
+  # plt.ylabel('Error')
+  plt.legend()
+  plt.grid(True)
+
+# 準確率圖
+def plot_accuracy(predictions, answers, threshold):
+  tp, tn, fp, fn = 0, 0, 0, 0
+
+  for x in range(len(predictions)):
+    if answers[x] == 1:
+      # if np.argmax(predictions[x]) == 1:
+      if predictions[x][1] >= threshold:
+        tp = tp + 1
+      else:
+        fn = fn + 1
+    else:
+      # if np.argmax(predictions[x]) == 0:
+      if predictions[x][1] < threshold:
+        tn = tn + 1
+      else:
+        fp = fp + 1
+  
+  accuracy = (tp + tn)/(tp + fp + fn + tn)
+  precision = tp / (tp + fp)
+  recall = tp / (tp + fn)
+  specificity = tn / (tn + fp)
+  print("Accuracy: " + str(accuracy))
+  print("Precision: " + str(precision))
+  print("Recall: " + str(recall))
+  # print("Specificity: " + str(specificity))
+  print("F-Measure: " + str(2*(recall * precision) / (recall + precision)))
+
+# %%
+# 下載資料
+!wget https://archive.ics.uci.edu/ml/machine-learning-databases/00573/SouthGermanCredit.zip
+with zipfile.ZipFile('SouthGermanCredit.zip', 'r') as zip_ref:
+    zip_ref.extractall('./SouthGermanCredit/')
+# %%
+# 清理資料
+original_df = pd.read_csv('./SouthGermanCredit/SouthGermanCredit.asc', sep=' ')
+original_df.describe()
+original_df=original_df.dropna()
+
+# 添加id
+df_with_id = add_id(original_df)
+# 切割資料
+client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x,client2_train_y, client2_test_x, client2_test_y, common_train_index, common_test_index = split_columns(df_with_id)
+# 顯示訓練測試資料大小
+print(
+    'There are {} common entries (out of {}) in client 1 and client 2\'s training datasets,\nand {} common entries (out of {}) in their test datasets'
+    .format(
+        len(common_train_index),
+        len(client1_train_x),
+        len(common_test_index),
+        len(client1_test_x)))
+
+
+#
+# %%
+#vfl
+# 設定參數
+batch_size = 32
+learning_rate = 1e-3
+epochs = 50
+
+# Instantiate an optimizer.
+optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
+# Instantiate a loss function.
+# Not from logits because of the softmax layer converting logits to probability.
+loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
+# Instantiate a metric function (accuracy)
+train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 #%%
 # init client
-client1 = Client(client1_train_x, client1_train_y,client1_test_x,client1_test_y, False)
-client2 = Client(client2_train_x, client2_train_y,client2_test_x,client2_test_y, True)
+normalizer1 = normalize_data(client1_train_x.loc[common_train_index])
+model1 =   tf.keras.Sequential([
+      normalizer1,
+      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+      layers.Dropout(0.5),
+      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+      layers.Dropout(0.5),
+      layers.Dense(2),
+      layers.Softmax()])
+client1 = Client(client1_train_x, client1_train_y,client1_test_x,client1_test_y, False,model1)
+
+
+normalizer2 = normalize_data(client2_train_x.loc[common_train_index])
+model2 = create_model(normalizer2)
+client2 = Client(client2_train_x, client2_train_y,client2_test_x,client2_test_y, True,model2)
 
 #%%
+# train_on_client
 common_train_index_list = common_train_index.to_list()
 epoch_loss = []
 epoch_acc = []
@@ -256,8 +280,6 @@ for epoch in range(epochs):
         
         total_loss = loss_value + total_loss
         train_acc_metric.update_state(client2.batch_answers(), prob)
-
-    
     train_acc = train_acc_metric.result()
     print(f'-----train accuracy{train_acc}-----')
     train_acc_metric.reset_states()
@@ -267,95 +289,50 @@ for epoch in range(epochs):
 plot_loss(epoch_loss, epoch_acc)
 
 #%%
-client1.predict(common_test_index)
+# 預測結果
 vfl_pred_test = (client1.predict(common_test_index) + client2.predict(common_test_index))/2
+
+# 計算roc,auc
 vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index), vfl_pred_test[:,1])
+auc1 = auc(vfl_fpr_test, vfl_tpr_test)
+draw_roc_curve=draw_roc_curve(vfl_fpr_test, vfl_tpr_test)
+print("AUC: {}".format(auc1 ))
+
+# 計算threshold 值
 vfl_gmeans_test = np.sqrt(vfl_tpr_test * (1-vfl_fpr_test))
 vfl_ix_test = np.argmax(vfl_gmeans_test)
+best_threshold = vfl_thresholds_test[vfl_ix_test]
 print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vfl_gmeans_test[vfl_ix_test]))
 
-# predictions and answers are already aligned
-plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index), vfl_thresholds_test[vfl_ix_test])
-client2.test_answers(common_test_index)
+# 準確率
+plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index), best_threshold)
 
-print("AUC: {}".format(roc_auc_score(client2.test_answers(common_test_index), vfl_pred_test[:,1])))
+# save result
 df=pd.DataFrame(client2.test_answers(common_test_index))
-vfl_pred_test_label = [1 if p >= vfl_thresholds_test[vfl_ix_test] else 0 for p in  vfl_pred_test[:,1]]
+vfl_pred_test_label = [1 if p >= best_threshold else 0 for p in  vfl_pred_test[:,1]]
 df['predict']=vfl_pred_test_label
-df.to_csv('vfl_predict.csv',encoding ='UTF-8-sig')
-
+df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
 #evalueate
 
 #%%
 
 # ----------------------------------centralized----------------------------
 #%%
-
-
-
-
-# 資料處理
-normalizer = tf.keras.layers.Normalization()
-normalizer.adapt(np.array(client1_train_x))
-
-def plot_loss(history):
-  plt.plot(history.history['loss'], label='loss')
-  plt.plot(history.history['accuracy'], label='accuracy')
-  plt.xlabel('Epoch')
-  # plt.ylabel('Error')
-  plt.legend()
-  plt.grid(True)
-
-def plot_predictions(prediction):
-  a = plt.axes(aspect='equal')
-  plt.scatter(testY, prediction)
-  plt.xlabel('True Values')
-  plt.ylabel('Predictions')
-  # lims = [500, 1000]
-  # plt.xlim([500, 1000])
-  # plt.ylim([500, 1000])
-  _ = plt.plot
-
-def plot_accuracy(prediction,testY):
-  tp = 0
-  tn = 0
-  fp = 0
-  fn = 0
-  testY_arr = testY
-
-  for x in range(200):
-    # print(str(testY_arr[x]) + "; " + str(prediction[x]))
-    # print("predict is : " + str(np.argmax(prediction[x])))
-    if testY_arr[x] == 1:
-      if np.argmax(prediction[x]) == 1:
-        tp = tp + 1
-      else:
-        fn = fn + 1
-    else:
-      if np.argmax(prediction[x]) == 0:
-        tn = tn + 1
-      else:
-        fp = fp + 1
-  
-  accuracy = (tp + tn)/(tp + fp + fn + tn)
-  precision = tp / (tp + fp)
-  recall = tp / (tp + fn)
-  specificity = tn / (tn + fp)
-  print("Accuracy: " + str(accuracy))
-  print("Precision: " + str(precision))
-  print("Recall: " + str(recall))
-  # print("Specificity: " + str(specificity))
-  print("F-Measure: " + str(2*(recall * precision) / (recall + precision)))
-
 #%% 
-# model 
-from tensorflow.keras import regularizers
 
-batch_size=32
-learning_rate=1e-3
+# 設定參數
+batch_size = 32
+learning_rate = 1e-3
+epochs = 20
 
-model = tf.keras.Sequential([
-      normalizer,
+# Instantiate a metric function (accuracy)
+train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
+
+#%%
+# init cen_1
+normalizer_cen1 = normalize_data(client1_train_x.loc[common_train_index])
+model_cen1 = model_cen1 = tf.keras.Sequential([
+      normalizer_cen1,
       layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
       layers.Dropout(0.5),
       layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
@@ -363,51 +340,92 @@ model = tf.keras.Sequential([
       layers.Dense(2),
       layers.Softmax()])
 
-model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
+model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
               metrics=['accuracy'])
 
 
 # fit1
-
-
 test_results = {}
-dnn_history = model.fit(client1_train_x, client1_train_y, epochs=50, verbose=0, batch_size=batch_size)
-plot_loss(dnn_history)
+cen_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=50, verbose=0, batch_size=batch_size)
+plot_loss(cen_history)
 
 #evaluate
-test_loss, test_acc = model.evaluate(client1_test_x, client1_test_y, verbose=2)
+test_loss, test_acc = model_cen1.evaluate(client1_test_x, client1_test_y, verbose=2)
 print('\nTest accuracy:', test_acc)
 
 
 # result
+cen1_pred_test= model_cen1.predict(client1_test_x)
+
+# 計算roc,auc
+cen1_fpr_test, cen1_tpr_test, cen1_thresholds_test = roc_curve(client1_test_y, cen1_pred_test[:,1])
+auc1 = auc(cen1_fpr_test, cen1_tpr_test)
+draw_roc_curve(cen1_fpr_test, cen1_tpr_test)
+print("AUC: {}".format(auc1 ))
+
+# 計算threshold 值
+
+cen1_gmeans_test = np.sqrt(cen1_tpr_test * (1-cen1_fpr_test))
+cen1_ix_test = np.argmax(cen1_gmeans_test)
+best_threshold_cen1 = cen1_thresholds_test[cen1_ix_test]
+print('Best Threshold=%f, G-Mean=%.3f\n' % (cen1_thresholds_test[cen1_ix_test], cen1_gmeans_test[cen1_ix_test]))
+
+
 # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
-dnn1_predictions = model.predict(client1_test_x)
-plot_accuracy(dnn1_predictions,client1_test_y)
 
-
-cen1_pred_test_label = [1 if p >= vfl_thresholds_test[vfl_ix_test] else 0 for p in  dnn1_predictions[:,1]]
+plot_accuracy(cen1_pred_test,client1_test_y,best_threshold_cen1)
+cen1_pred_test_label = [1 if p >= best_threshold_cen1 else 0 for p in  cen1_pred_test[:,1]]
 df['predict_cen1']=cen1_pred_test_label
 df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
-#%%
-# fit2
-normalizer = tf.keras.layers.Normalization()
-normalizer.adapt(np.array(client1_train_x))
 
-dnn_history = model.fit(client2_train_x, client2_train_y, epochs=50, verbose=0, batch_size=batch_size)
-plot_loss(dnn_history)
+#%%
+# init cen_2
+normalizer_cen2 = normalize_data(client2_train_x.loc[common_train_index])
+model_cen2 = tf.keras.Sequential([
+      normalizer_cen2,
+      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+      layers.Dropout(0.5),
+      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+      layers.Dropout(0.5),
+      layers.Dense(2),
+      layers.Softmax()])
+
+model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
+              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+              metrics=['accuracy'])
+
+
+# fit2
+test_results = {}
+cen_history = model_cen2.fit(client2_train_x, client2_train_y, epochs=50, verbose=0, batch_size=batch_size)
+plot_loss(cen_history)
 
 #evaluate
-test_loss, test_acc = model.evaluate(client2_test_x, client2_test_y, verbose=2)
+test_loss, test_acc = model_cen2.evaluate(client2_test_x, client2_test_y, verbose=2)
 print('\nTest accuracy:', test_acc)
 
 
 # result
+cen2_pred_test= model_cen2.predict(client2_test_x)
+# 計算roc,auc
+cen2_fpr_test, cen2_tpr_test, cen2_thresholds_test = roc_curve(client2_test_y, cen2_pred_test[:,1])
+auc2 = auc(cen2_fpr_test, cen2_tpr_test)
+draw_roc_curve(cen2_fpr_test, cen2_tpr_test)
+print("AUC: {}".format(auc2 ))
+
+# 計算threshold 值
+
+cen2_gmeans_test = np.sqrt(cen2_tpr_test * (2-cen2_fpr_test))
+cen2_ix_test = np.argmax(cen2_gmeans_test)
+best_threshold_cen2 = cen2_thresholds_test[cen2_ix_test]
+print('Best Threshold=%f, G-Mean=%.3f\n' % (cen2_thresholds_test[cen2_ix_test], cen2_gmeans_test[cen2_ix_test]))
+
+
+# save result
 # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
-dnn2_predictions = model.predict(client2_test_x)
-plot_accuracy(dnn1_predictions,client2_test_y)
-
-
-cen2_pred_test_label = [1 if p >= vfl_thresholds_test[vfl_ix_test] else 0 for p in  dnn2_predictions[:,1]]
+plot_accuracy(cen2_pred_test,client2_test_y,best_threshold_cen2)
+cen2_pred_test_label = [1 if p >= best_threshold_cen2 else 0 for p in  cen2_pred_test[:,1]]
 df['predict_cen2']=cen2_pred_test_label
 df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
+
