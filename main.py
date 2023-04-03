@@ -253,7 +253,14 @@ client1 = Client(client1_train_x, client1_train_y,client1_test_x,client1_test_y,
 
 
 normalizer2 = normalize_data(client2_train_x.loc[common_train_index])
-model2 = create_model(normalizer2)
+model2 = tf.keras.Sequential([
+      normalizer2,
+      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+      layers.Dropout(0.5),
+      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+      layers.Dropout(0.5),
+      layers.Dense(2),
+      layers.Softmax()])
 client2 = Client(client2_train_x, client2_train_y,client2_test_x,client2_test_y, True,model2)
 
 #%%
