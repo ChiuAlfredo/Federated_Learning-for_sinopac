@@ -38,9 +38,10 @@ id = pd.Series(range(0,1000)).apply(lambda i : str(uuid.uuid4()))
 df_with_id = original_df.copy()
 df_with_id['id'] = id
 df_with_id = df_with_id.set_index('id')
+
 client1_data = df_with_id[['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit','kredit']]
 client2_data = df_with_id.drop(['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit'], axis=1)
-#%%
+
 # 切割資料
 client1_train, client1_test = train_test_split(client1_data, test_size=0.2, random_state=0)
 client2_train, client2_test = train_test_split(client2_data, test_size=0.2, random_state=0)
@@ -56,6 +57,8 @@ def split_x_y(data_train,data_test):
 
 client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test)
 client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test)
+
+
 
 common_train_index = client1_train.index.intersection(client2_train.index)
 common_test_index = client1_test.index.intersection(client2_test.index)
@@ -73,7 +76,7 @@ print(
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 2
+epochs = 10
 
 # Instantiate an optimizer.
 optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
@@ -264,6 +267,7 @@ for epoch in range(epochs):
 plot_loss(epoch_loss, epoch_acc)
 
 #%%
+client1.predict(common_test_index)
 vfl_pred_test = (client1.predict(common_test_index) + client2.predict(common_test_index))/2
 vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index), vfl_pred_test[:,1])
 vfl_gmeans_test = np.sqrt(vfl_tpr_test * (1-vfl_fpr_test))
@@ -273,47 +277,26 @@ print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vf
 # predictions and answers are already aligned
 plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index), vfl_thresholds_test[vfl_ix_test])
 client2.test_answers(common_test_index)
-vfl_pred_test
+
 print("AUC: {}".format(roc_auc_score(client2.test_answers(common_test_index), vfl_pred_test[:,1])))
-df=client2.test_answers(common_test_index).copy()
-df['predict']=vfl_pred_test
+df=pd.DataFrame(client2.test_answers(common_test_index))
+vfl_pred_test_label = [1 if p >= vfl_thresholds_test[vfl_ix_test] else 0 for p in  vfl_pred_test[:,1]]
+df['predict']=vfl_pred_test_label
+df.to_csv('vfl_predict.csv',encoding ='UTF-8-sig')
+
 #evalueate
-test_loss, test_acc = model.evaluate(vfl_pred_test, client2.test_answers(common_test_index), vfl_thresholds_test[vfl_ix_test])
-print('\nTest accuracy:', test_acc)
+
 #%%
 
 # ----------------------------------centralized----------------------------
 #%%
+
+
+
+
 # 資料處理
-
-original_df = pd.read_csv('./SouthGermanCredit/SouthGermanCredit.asc', sep=' ')
-original_df.describe()
-id = pd.Series(range(0,1000)).apply(lambda i : str(uuid.uuid4()))
-df_with_id = original_df.copy()
-df_with_id['id'] = id
-df_with_id = df_with_id.set_index('id')
-client1_data = df_with_id[['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit','kredit']]
-client2_data = df_with_id.drop(['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit'], axis=1)
-#%%
-# 切割資料
-
-
-
-def split_x_y(data):
-    train_data, test_data = train_test_split(data, test_size=0.2, random_state=0)
-    train_y = train_data["kredit"].values
-    train_x = train_data.drop("kredit", axis=1)
-
-    test_x = test_data.drop("kredit", axis=1)
-    test_y = test_data["kredit"].values
-
-    return train_x, train_y, test_x, test_y
-client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_data)
-client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_data)
 normalizer = tf.keras.layers.Normalization()
 normalizer.adapt(np.array(client1_train_x))
-
-test_results = {}
 
 def plot_loss(history):
   plt.plot(history.history['loss'], label='loss')
@@ -388,6 +371,7 @@ model.compile(optimizer=keras.optimizers.Adam(learning_rate=learning_rate),
 # fit1
 
 
+test_results = {}
 dnn_history = model.fit(client1_train_x, client1_train_y, epochs=50, verbose=0, batch_size=batch_size)
 plot_loss(dnn_history)
 
@@ -398,12 +382,17 @@ print('\nTest accuracy:', test_acc)
 
 # result
 # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
-dnn_predictions = model.predict(client1_test_x)
-plot_accuracy(dnn_predictions,client1_test_y)
+dnn1_predictions = model.predict(client1_test_x)
+plot_accuracy(dnn1_predictions,client1_test_y)
 
+
+cen1_pred_test_label = [1 if p >= vfl_thresholds_test[vfl_ix_test] else 0 for p in  dnn1_predictions[:,1]]
+df['predict_cen1']=cen1_pred_test_label
+df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
 #%%
 # fit2
-
+normalizer = tf.keras.layers.Normalization()
+normalizer.adapt(np.array(client1_train_x))
 
 dnn_history = model.fit(client2_train_x, client2_train_y, epochs=50, verbose=0, batch_size=batch_size)
 plot_loss(dnn_history)
@@ -415,5 +404,10 @@ print('\nTest accuracy:', test_acc)
 
 # result
 # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
-dnn_predictions = model.predict(client2_test_x)
-plot_accuracy(dnn_predictions,client2_test_y)
+dnn2_predictions = model.predict(client2_test_x)
+plot_accuracy(dnn1_predictions,client2_test_y)
+
+
+cen2_pred_test_label = [1 if p >= vfl_thresholds_test[vfl_ix_test] else 0 for p in  dnn2_predictions[:,1]]
+df['predict_cen2']=cen2_pred_test_label
+df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
