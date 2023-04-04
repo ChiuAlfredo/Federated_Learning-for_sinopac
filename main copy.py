@@ -268,9 +268,9 @@ print(
 # %%
 #vfl
 # 設定參數
-batch_size = 32
-learning_rate = 1e-3
-epochs = 50
+batch_size = 90
+learning_rate = 0.5e-4
+epochs = 25
 
 # Instantiate an optimizer.
 optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
@@ -330,7 +330,7 @@ for epoch in range(epochs):
         total_loss = loss_value + total_loss
         train_acc_metric.update_state(client2.batch_answers(), prob)
     train_acc = train_acc_metric.result()
-    print(f'-----train accuracy{train_acc}-----')
+    print(f'-----train accuracy{train_acc}-----loss{(total_loss)/(step + 1)}')
     train_acc_metric.reset_states()
     epoch_loss.append((total_loss)/(step + 1))
     epoch_acc.append(train_acc)
@@ -372,7 +372,7 @@ df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 2
+epochs = 20
 
 # Instantiate a metric function (accuracy)
 train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
@@ -389,14 +389,26 @@ model_cen1 = model_cen1 = tf.keras.Sequential([
       layers.Dense(2),
       layers.Softmax()])
 
+
+epoch_loss=[]
+epoch_acc=[]
+# custom callback
+class PrintMetricsCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        epoch_loss.append(logs["loss"])
+        epoch_acc.append(logs["accuracy"])
+        print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
+
+
 model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
               metrics=['accuracy'])
 
 
+
 # fit1
 test_results = {}
-cen1_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=epochs, verbose=0, batch_size=batch_size)
+cen1_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
 
 
 #evaluate
@@ -407,6 +419,8 @@ print('\nTest accuracy:', test_acc)
 # result
 cen1_pred_test= model_cen1.predict(client1_test_x)
 
+# plot loss
+plot_loss(epoch_loss, epoch_acc)
 # 計算roc,auc
 cen1_fpr_test, cen1_tpr_test, cen1_thresholds_test = roc_curve(client1_test_y, cen1_pred_test[:,1])
 auc_cen1 = auc(cen1_fpr_test, cen1_tpr_test)
@@ -440,6 +454,16 @@ model_cen2 = tf.keras.Sequential([
       layers.Dense(2),
       layers.Softmax()])
 
+epoch_loss=[]
+epoch_acc=[]
+# custom callback
+class PrintMetricsCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        epoch_loss.append(logs["loss"])
+        epoch_acc.append(logs["accuracy"])
+        print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
+
+
 model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
               metrics=['accuracy'])
@@ -447,7 +471,7 @@ model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learn
 
 # fit2
 test_results = {}
-cen2_history = model_cen2.fit(client2_train_x, client2_train_y, epochs=10, verbose=0, batch_size=batch_size)
+cen2_history = model_cen2.fit(client2_train_x, client2_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
 
 
 #evaluate
@@ -457,6 +481,10 @@ print('\nTest accuracy:', test_acc)
 
 # result
 cen2_pred_test= model_cen2.predict(client2_test_x)
+
+# plot loss
+plot_loss(epoch_loss, epoch_acc)
+
 # 計算roc,auc
 cen2_fpr_test, cen2_tpr_test, cen2_thresholds_test = roc_curve(client2_test_y, cen2_pred_test[:,1])
 auc_cen2 = auc(cen2_fpr_test, cen2_tpr_test)
