@@ -23,15 +23,17 @@ import math
 import uuid
 import random
 import zipfile
+import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 #%%
 # 分割x and y
-def split_x_y(data_train,data_test):
+def split_x_y(data_train,data_test,target="kredit"):
 
-  train_y = data_train["kredit"]
-  train_x = data_train.drop("kredit", axis=1)
+  train_y = data_train[target]
+  train_x = data_train.drop(target, axis=1)
 
-  test_x = data_test.drop("kredit", axis=1)
-  test_y = data_test["kredit"]
+  test_x = data_test.drop(target, axis=1)
+  test_y = data_test[target]
 
   return train_x, train_y, test_x, test_y
 
@@ -44,19 +46,22 @@ def add_id(original_df):
 
   return df_with_id
 
-def split_columns(df_with_id):
+def split_columns(df_with_id,columns_list,target):
+  colum_1 = columns_list.copy()
+  colum_1.append(target)
+  colum_2 = columns_list.copy()
   # 分割欄位
-  client1_data = df_with_id[['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit','kredit']]
-  client2_data = df_with_id.drop(['laufkont','sparkont','moral','verw','famges','wohn','verm','laufzeit','hoehe','beszeit'], axis=1)
+  client1_data = df_with_id[colum_1]
+  client2_data = df_with_id.drop(colum_2, axis=1)
 
   # 切割資料
   client1_train, client1_test = train_test_split(client1_data, test_size=0.2, random_state=0)
   client2_train, client2_test = train_test_split(client2_data, test_size=0.2, random_state=0)
-  client1_test['kredit']
+
 
   # 切割x,y
-  client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test)
-  client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test)
+  client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test,target)
+  client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test,target)
 
   # 找出共同的index
   common_train_index = client1_train.index.intersection(client2_train.index)
@@ -84,6 +89,7 @@ class Client:
     
   def next_batch(self, index):
     self.batchX = self.__trainX.loc[index]
+
     if not self.labelled:
       grads = []
       self.model_output = np.zeros((len(index), 2))
@@ -94,7 +100,9 @@ class Client:
           output_for_grad = output_by_example[:,1]
         self.model_output[i] = output_by_example
         grads.append(gt.gradient(output_for_grad, self.model.trainable_weights))
+
       return grads
+    
     else:
       self.batchY = self.__trainY.loc[index]
       with tf.GradientTape() as self.gt:
@@ -151,9 +159,10 @@ class Client:
     return [sum(x) for x in zip(*partial_grads)]
 # 畫圖
 # roc curve
-def draw_roc_curve(fpr, tpr, label=None):
+def draw_roc_curve(fpr, tpr,auc):
+  fig, ax = plt.subplots()
   plt.title('Receiver Operating Characteristic')
-  plt.plot(fpr, tpr, color = 'orange', label = 'AUC = %0.2f' % auc1)
+  plt.plot(fpr, tpr, color = 'orange', label = 'AUC = %0.2f' % auc)
   plt.legend(loc = 'lower right')
   plt.plot([0, 1], [0, 1],'r--')
   plt.xlim([0, 1])
@@ -161,8 +170,11 @@ def draw_roc_curve(fpr, tpr, label=None):
   plt.ylabel('True Positive Rate')
   plt.xlabel('False Positive Rate')
   plt.show()  
+
+
 # 訓練圖
 def plot_loss(loss, accuracy):
+  fig, ax = plt.subplots()
   plt.plot(loss, label='loss')
   plt.plot(accuracy, label='accuracy')
   plt.xlabel('Epoch')
@@ -198,6 +210,7 @@ def plot_accuracy(predictions, answers, threshold):
   # print("Specificity: " + str(specificity))
   print("F-Measure: " + str(2*(recall * precision) / (recall + precision)))
 
+
 # %%
 # 下載資料
 !wget https://archive.ics.uci.edu/ml/machine-learning-databases/00573/SouthGermanCredit.zip
@@ -209,10 +222,19 @@ original_df = pd.read_csv('./SouthGermanCredit/SouthGermanCredit.asc', sep=' ')
 original_df.describe()
 original_df=original_df.dropna()
 
+
+# Normalize all columns
+scaler = MinMaxScaler()
+df_norm = scaler.fit_transform(original_df)
+original_df =pd.DataFrame(df_norm,columns=original_df.columns)
+
+# choose target
+target='kredit'
+columns_list = ['rate',	'famges',	'buerge',	'wohnzeit',	'verm',	'alter',	'weitkred',	'wohn',	'bishkred',	'beruf'	,'pers'	,'telef',	'gastarb']
 # 添加id
 df_with_id = add_id(original_df)
 # 切割資料
-client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x,client2_train_y, client2_test_x, client2_test_y, common_train_index, common_test_index = split_columns(df_with_id)
+client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x,client2_train_y, client2_test_x, client2_test_y, common_train_index, common_test_index = split_columns(df_with_id,columns_list=columns_list,target=target)
 # 顯示訓練測試資料大小
 print(
     'There are {} common entries (out of {}) in client 1 and client 2\'s training datasets,\nand {} common entries (out of {}) in their test datasets'
@@ -222,8 +244,6 @@ print(
         len(common_test_index),
         len(client1_test_x)))
 
-
-#
 # %%
 #vfl
 # 設定參數
@@ -302,7 +322,7 @@ vfl_pred_test = (client1.predict(common_test_index) + client2.predict(common_tes
 # 計算roc,auc
 vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index), vfl_pred_test[:,1])
 auc1 = auc(vfl_fpr_test, vfl_tpr_test)
-draw_roc_curve=draw_roc_curve(vfl_fpr_test, vfl_tpr_test)
+draw_roc_curve(vfl_fpr_test, vfl_tpr_test,auc1)
 print("AUC: {}".format(auc1 ))
 
 # 計算threshold 值
@@ -347,6 +367,17 @@ model_cen1 = model_cen1 = tf.keras.Sequential([
       layers.Dense(2),
       layers.Softmax()])
 
+
+epoch_loss=[]
+epoch_acc=[]
+# custom callback
+class PrintMetricsCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        epoch_loss.append(logs["loss"])
+        epoch_acc.append(logs["accuracy"])
+        print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
+
+
 model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
               metrics=['accuracy'])
@@ -354,8 +385,8 @@ model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learn
 
 # fit1
 test_results = {}
-cen_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=50, verbose=0, batch_size=batch_size)
-plot_loss(cen_history)
+cen1_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
+
 
 #evaluate
 test_loss, test_acc = model_cen1.evaluate(client1_test_x, client1_test_y, verbose=2)
@@ -365,10 +396,12 @@ print('\nTest accuracy:', test_acc)
 # result
 cen1_pred_test= model_cen1.predict(client1_test_x)
 
+# plot loss
+plot_loss(epoch_loss, epoch_acc)
 # 計算roc,auc
 cen1_fpr_test, cen1_tpr_test, cen1_thresholds_test = roc_curve(client1_test_y, cen1_pred_test[:,1])
-auc1 = auc(cen1_fpr_test, cen1_tpr_test)
-draw_roc_curve(cen1_fpr_test, cen1_tpr_test)
+auc_cen1 = auc(cen1_fpr_test, cen1_tpr_test)
+draw_roc_curve(cen1_fpr_test, cen1_tpr_test,auc=auc_cen1)
 print("AUC: {}".format(auc1 ))
 
 # 計算threshold 值
@@ -398,6 +431,16 @@ model_cen2 = tf.keras.Sequential([
       layers.Dense(2),
       layers.Softmax()])
 
+epoch_loss=[]
+epoch_acc=[]
+# custom callback
+class PrintMetricsCallback(tf.keras.callbacks.Callback):
+    def on_epoch_end(self, epoch, logs=None):
+        epoch_loss.append(logs["loss"])
+        epoch_acc.append(logs["accuracy"])
+        print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
+
+
 model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
               loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
               metrics=['accuracy'])
@@ -405,8 +448,8 @@ model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learn
 
 # fit2
 test_results = {}
-cen_history = model_cen2.fit(client2_train_x, client2_train_y, epochs=50, verbose=0, batch_size=batch_size)
-plot_loss(cen_history)
+cen2_history = model_cen2.fit(client2_train_x, client2_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
+
 
 #evaluate
 test_loss, test_acc = model_cen2.evaluate(client2_test_x, client2_test_y, verbose=2)
@@ -415,11 +458,15 @@ print('\nTest accuracy:', test_acc)
 
 # result
 cen2_pred_test= model_cen2.predict(client2_test_x)
+
+# plot loss
+plot_loss(epoch_loss, epoch_acc)
+
 # 計算roc,auc
 cen2_fpr_test, cen2_tpr_test, cen2_thresholds_test = roc_curve(client2_test_y, cen2_pred_test[:,1])
-auc2 = auc(cen2_fpr_test, cen2_tpr_test)
-draw_roc_curve(cen2_fpr_test, cen2_tpr_test)
-print("AUC: {}".format(auc2 ))
+auc_cen2 = auc(cen2_fpr_test, cen2_tpr_test)
+draw_roc_curve=draw_roc_curve(cen2_fpr_test, cen2_tpr_test,auc=auc_cen2)
+print("AUC: {}".format(auc_cen2 ))
 
 # 計算threshold 值
 
@@ -427,7 +474,6 @@ cen2_gmeans_test = np.sqrt(cen2_tpr_test * (2-cen2_fpr_test))
 cen2_ix_test = np.argmax(cen2_gmeans_test)
 best_threshold_cen2 = cen2_thresholds_test[cen2_ix_test]
 print('Best Threshold=%f, G-Mean=%.3f\n' % (cen2_thresholds_test[cen2_ix_test], cen2_gmeans_test[cen2_ix_test]))
-
 
 # save result
 # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])

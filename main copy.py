@@ -240,9 +240,10 @@ original_df['FamilySize'] = original_df['SibSp'] + original_df['Parch'] + 1
 # Drop the 'SibSp' and 'Parch' columns
 original_df.drop(['SibSp', 'Parch'], axis=1, inplace=True)
 
-scaler = MinMaxScaler()
+
 
 # Normalize all columns
+scaler = MinMaxScaler()
 df_norm = scaler.fit_transform(original_df)
 original_df =pd.DataFrame(df_norm,columns=original_df.columns)
 
