@@ -263,13 +263,15 @@ num_folds = 5
 # merge train and test data
 client1_input = pd.concat((client1_train_x,client1_test_x),axis=0)
 client2_input = pd.concat((client2_train_x,client2_test_x),axis=0)
+client1_target = pd.concat((client1_train_y,client1_test_y),axis=0)
+client2_target = pd.concat((client2_train_y,client2_test_y),axis=0)
 
 # get index
-client1_index = client1_input.index.to_numpy()
-client2_index = client2_input.index.to_numpy()
+client1_input_index = client1_input.index.to_numpy()
+client2_input_index = client2_input.index.to_numpy()
+client1_target_index = client1_target.index.to_numpy()
+client2_target_index = client2_target.index.to_numpy()
 
-client1_target = np.concatenate((client1_train_y,client1_test_y),axis=0)
-client2_target = np.concatenate((client2_train_y,client2_test_y),axis=0)
 
 # Instantiate an optimizer.
 optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
@@ -286,21 +288,36 @@ kfold = KFold(n_splits=num_folds, shuffle=True)
 fold_no =1
 
 for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in zip(
-        kfold.split(client1_index, client1_target),
-        kfold.split(client2_index, client2_target)):
+        kfold.split(client1_input_index, client1_target_index),
+        kfold.split(client2_input_index, client2_target_index)):
   
   # index
-  cen1_train_x_index = client1_index[cen1_train_index]
-  cen1_test_x_index = client1_index[cen1_test_index]
-  cen2_train_x_index = client2_index[cen2_train_index]
-  cen2_test_x_index = client2_index[cen2_test_index]
+  cen1_train_x_index = client1_input_index[cen1_train_index]
+  cen2_train_x_index = client2_input_index[cen2_train_index]
+  
+  cen1_test_x_index = client1_input_index[cen1_test_index]
+  cen2_test_x_index = client2_input_index[cen2_test_index]
+  
+  cen1_train_y_index = client1_target_index[cen1_train_index]
+  cen2_train_y_index = client2_target_index[cen2_train_index]
+  
+  cen1_test_y_index = client1_target_index[cen1_test_index]
+  cen2_test_y_index = client2_target_index[cen2_test_index]
+  
   
   # define train,test x use index
   client1_train_x_k = client1_input[client1_input.index.isin(cen1_train_x_index)]
-  client1_test_x_k = client1_input[client1_input.index.isin(cen1_test_x_index)]
   client2_train_x_k = client2_input[client2_input.index.isin(cen2_train_x_index)]
+  
+  client1_test_x_k = client1_input[client1_input.index.isin(cen1_test_x_index)]
   client2_test_x_k = client2_input[client2_input.index.isin(cen2_test_x_index)]
 
+  client1_train_y_k = client1_target[client1_target.index.isin(cen1_train_y_index)]
+  client2_train_y_k = client2_target[client2_target.index.isin(cen2_train_y_index)]
+  
+  client1_test_y_k = client1_target[client1_target.index.isin(cen1_test_y_index)]
+  client2_test_y_k = client2_target[client2_target.index.isin(cen2_test_y_index)]
+  
 
   common_train_index_k = np.intersect1d(cen1_train_x_index,cen2_train_x_index)
   common_test_index_k = np.intersect1d(cen1_test_x_index,cen2_test_x_index)
@@ -317,7 +334,7 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
         layers.Dense(2),
         layers.Softmax()])
   model1.summary()
-  client1 = Client( client1_train_x_k, client1_train_y,client1_test_x_k,client1_test_y, False,model1)
+  client1 = Client( client1_train_x_k, client1_train_y_k,client1_test_x_k,client1_test_y_k, False,model1)
 
 
   normalizer2 = normalize_data(client2_train_x_k.loc[common_train_index_k])
@@ -329,7 +346,7 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
         layers.Dropout(0.5),
         layers.Dense(2),
         layers.Softmax()])
-  client2 = Client(client2_train_x_k, client2_train_y,client2_test_x_k,client2_test_y, True,model2)
+  client2 = Client(client2_train_x_k, client2_train_y_k,client2_test_x_k,client2_test_y_k, True,model2)
 
   #%%
   # train_on_client
