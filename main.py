@@ -264,6 +264,10 @@ num_folds = 5
 client1_input = pd.concat((client1_train_x,client1_test_x),axis=0)
 client2_input = pd.concat((client2_train_x,client2_test_x),axis=0)
 
+# get index
+client1_index = client1_input.index.to_numpy()
+client2_index = client2_input.index.to_numpy()
+
 client1_target = np.concatenate((client1_train_y,client1_test_y),axis=0)
 client2_target = np.concatenate((client2_train_y,client2_test_y),axis=0)
 
@@ -281,11 +285,29 @@ kfold = KFold(n_splits=num_folds, shuffle=True)
 # kfold cross validation evaluation of a model
 fold_no =1
 
-for (cen1_train, cen1_test), (cen2_train, cen2_test) in zip(
-        kfold.split(client1_input, client1_target),
-        kfold.split(client2_input, client2_target)):
-  # init client
-  normalizer1 = normalize_data(client1_train_x.loc[common_train_index])
+for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in zip(
+        kfold.split(client1_index, client1_target),
+        kfold.split(client2_index, client2_target)):
+  
+  # index
+  cen1_train_x_index = client1_index[cen1_train_index]
+  cen1_test_x_index = client1_index[cen1_test_index]
+  cen2_train_x_index = client2_index[cen2_train_index]
+  cen2_test_x_index = client2_index[cen2_test_index]
+  
+  # define train,test x use index
+  client1_train_x_k = client1_input[client1_input.index.isin(cen1_train_x_index)]
+  client1_test_x_k = client1_input[client1_input.index.isin(cen1_test_x_index)]
+  client2_train_x_k = client2_input[client2_input.index.isin(cen2_train_x_index)]
+  client2_test_x_k = client2_input[client2_input.index.isin(cen2_test_x_index)]
+
+
+  common_train_index_k = np.intersect1d(cen1_train_x_index,cen2_train_x_index)
+  common_test_index_k = np.intersect1d(cen1_test_x_index,cen2_test_x_index)
+  
+  
+  #init model
+  normalizer1 = normalize_data(client1_train_x_k.loc[common_train_index_k])
   model1 =   tf.keras.Sequential([
         normalizer1,
         layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
@@ -294,10 +316,11 @@ for (cen1_train, cen1_test), (cen2_train, cen2_test) in zip(
         layers.Dropout(0.5),
         layers.Dense(2),
         layers.Softmax()])
-  client1 = Client(client1_input[cen1_train], client1_target[cen1_train],client1_input[cen1_test],client1_target[cen1_test], False,model1)
+  model1.summary()
+  client1 = Client( client1_train_x_k, client1_train_y,client1_test_x_k,client1_test_y, False,model1)
 
 
-  normalizer2 = normalize_data(client2_train_x.loc[common_train_index])
+  normalizer2 = normalize_data(client2_train_x_k.loc[common_train_index_k])
   model2 = tf.keras.Sequential([
         normalizer2,
         layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
@@ -306,19 +329,19 @@ for (cen1_train, cen1_test), (cen2_train, cen2_test) in zip(
         layers.Dropout(0.5),
         layers.Dense(2),
         layers.Softmax()])
-  client2 = Client(client2_input[cen2_train], client2_target[cen2_train],client2_input[cen2_test],client2_target[cen2_test], True,model2)
+  client2 = Client(client2_train_x_k, client2_train_y,client2_test_x_k,client2_test_y, True,model2)
 
   #%%
   # train_on_client
-  common_train_index_list = common_train_index.to_list()
+  common_train_index_list_k = common_train_index_k.tolist()
   epoch_loss = []
   epoch_acc = []
 
   for epoch in range(epochs):
       print(f'run in {epoch} epoch')
       # epoch=0
-      random.shuffle(common_train_index_list)
-      train_index_batches = [common_train_index_list[i:i + batch_size] for i in range(0, len(common_train_index_list), batch_size)] 
+      random.shuffle(common_train_index_list_k)
+      train_index_batches = [common_train_index_list_k[i:i + batch_size] for i in range(0, len(common_train_index_list_k), batch_size)] 
       total_loss = 0.0
       # Iterate over the batches of the dataset.
       for step, batch_index in enumerate(train_index_batches):
@@ -342,10 +365,10 @@ for (cen1_train, cen1_test), (cen2_train, cen2_test) in zip(
 
   #%%
   # 預測結果
-  vfl_pred_test = (client1.predict(common_test_index) + client2.predict(common_test_index))/2
+  vfl_pred_test = (client1.predict(common_test_index_k) + client2.predict(common_test_index_k))/2
 
   # 計算roc,auc
-  vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index), vfl_pred_test[:,1])
+  vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index_k), vfl_pred_test[:,1])
   auc1 = auc(vfl_fpr_test, vfl_tpr_test)
   draw_roc_curve(vfl_fpr_test, vfl_tpr_test,auc1)
   print("AUC: {}".format(auc1 ))
@@ -357,10 +380,10 @@ for (cen1_train, cen1_test), (cen2_train, cen2_test) in zip(
   print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vfl_gmeans_test[vfl_ix_test]))
 
   # 準確率
-  plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index), best_threshold)
+  plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index_k), best_threshold)
 
   # save result
-  df=pd.DataFrame(client2.test_answers(common_test_index))
+  df=pd.DataFrame(client2.test_answers(common_test_index_k))
   vfl_pred_test_label = [1 if p >= best_threshold else 0 for p in  vfl_pred_test[:,1]]
   df['predict']=vfl_pred_test_label
   df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
