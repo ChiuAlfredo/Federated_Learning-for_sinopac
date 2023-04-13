@@ -406,7 +406,6 @@ model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learn
               metrics=['accuracy'])
 
 
-
 # fit1
 test_results = {}
 cen1_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])

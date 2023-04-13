@@ -205,11 +205,16 @@ def plot_accuracy(predictions, answers, threshold):
   precision = tp / (tp + fp)
   recall = tp / (tp + fn)
   specificity = tn / (tn + fp)
+  
+  fmeasure = 2*(recall * precision) / (recall + precision)
   print("Accuracy: " + str(accuracy))
   print("Precision: " + str(precision))
   print("Recall: " + str(recall))
   # print("Specificity: " + str(specificity))
   print("F-Measure: " + str(2*(recall * precision) / (recall + precision)))
+  
+  return accuracy, precision, recall, fmeasure
+
 
 
 # %%
@@ -283,14 +288,15 @@ train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 # define the kfold cross validation
 kfold = KFold(n_splits=num_folds, shuffle=True)
 
-#%%
+#%% vfl mode
 # kfold cross validation evaluation of a model
 
-
-for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in zip(
+df_result = pd.DataFrame(columns=['model','fold','accuracy','precision','recall','fmeasure'])
+for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index)) in enumerate(zip(
         kfold.split(client1_input_index, client1_target_index),
-        kfold.split(client2_input_index, client2_target_index)):
+        kfold.split(client2_input_index, client2_target_index))):
   
+  print(f'------this is {fold} fold------')
   # index
   cen1_train_x_index = client1_input_index[cen1_train_index]
   cen2_train_x_index = client2_input_index[cen2_train_index]
@@ -333,7 +339,6 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
         layers.Dropout(0.5),
         layers.Dense(2),
         layers.Softmax()])
-  model1.summary()
   client1 = Client( client1_train_x_k, client1_train_y_k,client1_test_x_k,client1_test_y_k, False,model1)
 
 
@@ -372,7 +377,7 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
           total_loss = loss_value + total_loss
           train_acc_metric.update_state(client2.batch_answers(), prob)
       train_acc = train_acc_metric.result()
-      print(f'-----train accuracy{train_acc}-----')
+      print(f'===train accuracy{train_acc}====loss:{total_loss/(step + 1)}')
       train_acc_metric.reset_states()
       epoch_loss.append((total_loss)/(step + 1))
       epoch_acc.append(train_acc)
@@ -395,20 +400,19 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
   print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vfl_gmeans_test[vfl_ix_test]))
 
   # 準確率
-  plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index_k), best_threshold)
+
+  accuracy, precision, recall, fmeasure=plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index_k), best_threshold)
+
 
   # save result
-  df=pd.DataFrame(client2.test_answers(common_test_index_k))
-  vfl_pred_test_label = [1 if p >= best_threshold else 0 for p in  vfl_pred_test[:,1]]
-  df['predict']=vfl_pred_test_label
-  df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
+  df = df.append({'model':'vfl_cen','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
   #evalueate
-
+df.to_csv('vfl_score.csv',index=False)
 #%%
 
 # ----------------------------------centralized----------------------------
-#%%
-#%% 
+
+#%% # centralized model
 
 # 設定參數
 batch_size = 32
@@ -418,130 +422,169 @@ epochs = 20
 # Instantiate a metric function (accuracy)
 train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 
-#%%
-# init cen_1
-normalizer_cen1 = normalize_data(client1_train_x.loc[common_train_index])
-model_cen1 = model_cen1 = tf.keras.Sequential([
-      normalizer_cen1,
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(2),
-      layers.Softmax()])
+
+df_result = pd.DataFrame(columns=['model','fold','accuracy','precision','recall','fmeasure'])
+for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index)) in enumerate(zip(
+        kfold.split(client1_input_index, client1_target_index),
+        kfold.split(client2_input_index, client2_target_index))):
+  
+  # index
+  cen1_train_x_index = client1_input_index[cen1_train_index]
+  cen2_train_x_index = client2_input_index[cen2_train_index]
+  
+  cen1_test_x_index = client1_input_index[cen1_test_index]
+  cen2_test_x_index = client2_input_index[cen2_test_index]
+  
+  cen1_train_y_index = client1_target_index[cen1_train_index]
+  cen2_train_y_index = client2_target_index[cen2_train_index]
+  
+  cen1_test_y_index = client1_target_index[cen1_test_index]
+  cen2_test_y_index = client2_target_index[cen2_test_index]
+  
+  
+  # define train,test x use index
+  client1_train_x_k = client1_input[client1_input.index.isin(cen1_train_x_index)]
+  client2_train_x_k = client2_input[client2_input.index.isin(cen2_train_x_index)]
+  
+  client1_test_x_k = client1_input[client1_input.index.isin(cen1_test_x_index)]
+  client2_test_x_k = client2_input[client2_input.index.isin(cen2_test_x_index)]
+
+  client1_train_y_k = client1_target[client1_target.index.isin(cen1_train_y_index)]
+  client2_train_y_k = client2_target[client2_target.index.isin(cen2_train_y_index)]
+  
+  client1_test_y_k = client1_target[client1_target.index.isin(cen1_test_y_index)]
+  client2_test_y_k = client2_target[client2_target.index.isin(cen2_test_y_index)]
+  
+
+  common_train_index_k = np.intersect1d(cen1_train_x_index,cen2_train_x_index)
+  common_test_index_k = np.intersect1d(cen1_test_x_index,cen2_test_x_index)
+  
+  # ----------init cen_1
+  normalizer_cen1 = normalize_data(client1_train_x_k.loc[common_train_index_k])
+  model_cen1 = tf.keras.Sequential([
+        normalizer_cen1,
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(2),
+        layers.Softmax()])
 
 
-epoch_loss=[]
-epoch_acc=[]
-# custom callback
-class PrintMetricsCallback(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        epoch_loss.append(logs["loss"])
-        epoch_acc.append(logs["accuracy"])
-        print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
+  epoch_loss=[]
+  epoch_acc=[]
+  # custom callback
+  class PrintMetricsCallback(tf.keras.callbacks.Callback):
+      def on_epoch_end(self, epoch, logs=None):
+          epoch_loss.append(logs["loss"])
+          epoch_acc.append(logs["accuracy"])
+          print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
 
 
-model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
-              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-              metrics=['accuracy'])
+  model_cen1.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
+                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+                metrics=['accuracy'])
 
 
-# fit1
-test_results = {}
-cen1_history = model_cen1.fit(client1_train_x, client1_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
+  # fit1
+  test_results = {}
+  cen1_history = model_cen1.fit(client1_train_x_k, client1_train_y_k, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
 
 
-#evaluate
-test_loss, test_acc = model_cen1.evaluate(client1_test_x, client1_test_y, verbose=2)
-print('\nTest accuracy:', test_acc)
+  #evaluate
+  test_loss, test_acc = model_cen1.evaluate(client1_test_x_k, client1_test_y_k, verbose=2)
+  print('\nTest accuracy:', test_acc)
 
 
-# result
-cen1_pred_test= model_cen1.predict(client1_test_x)
+  # result
+  cen1_pred_test= model_cen1.predict(client1_test_x_k)
 
-# plot loss
-plot_loss(epoch_loss, epoch_acc)
-# 計算roc,auc
-cen1_fpr_test, cen1_tpr_test, cen1_thresholds_test = roc_curve(client1_test_y, cen1_pred_test[:,1])
-auc_cen1 = auc(cen1_fpr_test, cen1_tpr_test)
-draw_roc_curve(cen1_fpr_test, cen1_tpr_test,auc=auc_cen1)
-print("AUC: {}".format(auc1 ))
+  # plot loss
+  plot_loss(epoch_loss, epoch_acc)
+  # 計算roc,auc
+  cen1_fpr_test, cen1_tpr_test, cen1_thresholds_test = roc_curve(client1_test_y_k, cen1_pred_test[:,1])
+  auc_cen1 = auc(cen1_fpr_test, cen1_tpr_test)
+  draw_roc_curve(cen1_fpr_test, cen1_tpr_test,auc=auc_cen1)
+  print("AUC: {}".format(auc_cen1 ))
 
-# 計算threshold 值
+  # 計算threshold 值
 
-cen1_gmeans_test = np.sqrt(cen1_tpr_test * (1-cen1_fpr_test))
-cen1_ix_test = np.argmax(cen1_gmeans_test)
-best_threshold_cen1 = cen1_thresholds_test[cen1_ix_test]
-print('Best Threshold=%f, G-Mean=%.3f\n' % (cen1_thresholds_test[cen1_ix_test], cen1_gmeans_test[cen1_ix_test]))
-
-
-# probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
-
-plot_accuracy(cen1_pred_test,client1_test_y,best_threshold_cen1)
-cen1_pred_test_label = [1 if p >= best_threshold_cen1 else 0 for p in  cen1_pred_test[:,1]]
-df['predict_cen1']=cen1_pred_test_label
-df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
-
-#%%
-# init cen_2
-normalizer_cen2 = normalize_data(client2_train_x.loc[common_train_index])
-model_cen2 = tf.keras.Sequential([
-      normalizer_cen2,
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(2),
-      layers.Softmax()])
-
-epoch_loss=[]
-epoch_acc=[]
-# custom callback
-class PrintMetricsCallback(tf.keras.callbacks.Callback):
-    def on_epoch_end(self, epoch, logs=None):
-        epoch_loss.append(logs["loss"])
-        epoch_acc.append(logs["accuracy"])
-        print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
+  cen1_gmeans_test = np.sqrt(cen1_tpr_test * (1-cen1_fpr_test))
+  cen1_ix_test = np.argmax(cen1_gmeans_test)
+  best_threshold_cen1 = cen1_thresholds_test[cen1_ix_test]
+  print('Best Threshold=%f, G-Mean=%.3f\n' % (cen1_thresholds_test[cen1_ix_test], cen1_gmeans_test[cen1_ix_test]))
 
 
-model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
-              loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
-              metrics=['accuracy'])
+  # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
+
+  accuracy, precision, recall, fmeasure=plot_accuracy(cen1_pred_test,client1_test_y_k,best_threshold_cen1)
+  cen1_pred_test_label = [1 if p >= best_threshold_cen1 else 0 for p in  cen1_pred_test[:,1]]
+  # df['predict_cen1']=cen1_pred_test_label
+  # df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
+  df_result = df_result.append({'model':'cen1','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
+
+# ---------------init cen_2
+  normalizer_cen2 = normalize_data(client2_train_x_k.loc[common_train_index_k])
+  model_cen2 = tf.keras.Sequential([
+        normalizer_cen2,
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(2),
+        layers.Softmax()])
+
+  epoch_loss=[]
+  epoch_acc=[]
+  # custom callback
+  class PrintMetricsCallback(tf.keras.callbacks.Callback):
+      def on_epoch_end(self, epoch, logs=None):
+          epoch_loss.append(logs["loss"])
+          epoch_acc.append(logs["accuracy"])
+          print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
 
 
-# fit2
-test_results = {}
-cen2_history = model_cen2.fit(client2_train_x, client2_train_y, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
+  model_cen2.compile(optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate),
+                loss=tf.keras.losses.SparseCategoricalCrossentropy(from_logits=False),
+                metrics=['accuracy'])
 
 
-#evaluate
-test_loss, test_acc = model_cen2.evaluate(client2_test_x, client2_test_y, verbose=2)
-print('\nTest accuracy:', test_acc)
+  # fit2
+  test_results = {}
+  cen2_history = model_cen2.fit(client2_train_x_k, client2_train_y_k, epochs=epochs, verbose=0, batch_size=batch_size, callbacks=[PrintMetricsCallback()])
 
 
-# result
-cen2_pred_test= model_cen2.predict(client2_test_x)
+  #evaluate
+  test_loss, test_acc = model_cen2.evaluate(client2_test_x_k, client2_test_y_k, verbose=2)
+  print('\nTest accuracy:', test_acc)
 
-# plot loss
-plot_loss(epoch_loss, epoch_acc)
 
-# 計算roc,auc
-cen2_fpr_test, cen2_tpr_test, cen2_thresholds_test = roc_curve(client2_test_y, cen2_pred_test[:,1])
-auc_cen2 = auc(cen2_fpr_test, cen2_tpr_test)
-draw_roc_curve=draw_roc_curve(cen2_fpr_test, cen2_tpr_test,auc=auc_cen2)
-print("AUC: {}".format(auc_cen2 ))
+  # result
+  cen2_pred_test= model_cen2.predict(client2_test_x_k)
 
-# 計算threshold 值
+  # plot loss
+  plot_loss(epoch_loss, epoch_acc)
 
-cen2_gmeans_test = np.sqrt(cen2_tpr_test * (2-cen2_fpr_test))
-cen2_ix_test = np.argmax(cen2_gmeans_test)
-best_threshold_cen2 = cen2_thresholds_test[cen2_ix_test]
-print('Best Threshold=%f, G-Mean=%.3f\n' % (cen2_thresholds_test[cen2_ix_test], cen2_gmeans_test[cen2_ix_test]))
+  # 計算roc,auc
+  cen2_fpr_test, cen2_tpr_test, cen2_thresholds_test = roc_curve(client2_test_y_k, cen2_pred_test[:,1])
+  auc_cen2 = auc(cen2_fpr_test, cen2_tpr_test)
+  draw_roc_curve(cen2_fpr_test, cen2_tpr_test,auc=auc_cen2)
+  print("AUC: {}".format(auc_cen2 ))
 
-# save result
-# probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
-plot_accuracy(cen2_pred_test,client2_test_y,best_threshold_cen2)
-cen2_pred_test_label = [1 if p >= best_threshold_cen2 else 0 for p in  cen2_pred_test[:,1]]
-df['predict_cen2']=cen2_pred_test_label
-df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
+  # 計算threshold 值
 
+  cen2_gmeans_test = np.sqrt(cen2_tpr_test * (2-cen2_fpr_test))
+  cen2_ix_test = np.argmax(cen2_gmeans_test)
+  best_threshold_cen2 = cen2_thresholds_test[cen2_ix_test]
+  print('Best Threshold=%f, G-Mean=%.3f\n' % (cen2_thresholds_test[cen2_ix_test], cen2_gmeans_test[cen2_ix_test]))
+
+  # save result
+  # probability_model = tf.keras.Sequential([model, tf.keras.layers.Softmax()])
+  accuracy, precision, recall, fmeasure=plot_accuracy(cen2_pred_test,client2_test_y_k,best_threshold_cen2)
+  cen2_pred_test_label = [1 if p >= best_threshold_cen2 else 0 for p in  cen2_pred_test[:,1]]
+  # df['predict_cen2']=cen2_pred_test_label
+  # df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
+  df_result = df_result.append({'model':'cen2','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
+
+df_result.to_csv('cen12_score.csv',encoding ='UTF-8-sig')
+# %%
