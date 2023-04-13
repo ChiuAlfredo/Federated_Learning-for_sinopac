@@ -257,7 +257,7 @@ print(
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 50
+epochs = 20
 num_folds = 5 
 
 # merge train and test data
@@ -285,7 +285,7 @@ kfold = KFold(n_splits=num_folds, shuffle=True)
 
 #%%
 # kfold cross validation evaluation of a model
-fold_no =1
+
 
 for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in zip(
         kfold.split(client1_input_index, client1_target_index),
@@ -348,7 +348,6 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
         layers.Softmax()])
   client2 = Client(client2_train_x_k, client2_train_y_k,client2_test_x_k,client2_test_y_k, True,model2)
 
-  #%%
   # train_on_client
   common_train_index_list_k = common_train_index_k.tolist()
   epoch_loss = []
@@ -380,7 +379,6 @@ for (cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index) in 
 
   plot_loss(epoch_loss, epoch_acc)
 
-  #%%
   # 預測結果
   vfl_pred_test = (client1.predict(common_test_index_k) + client2.predict(common_test_index_k))/2
 
