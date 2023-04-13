@@ -51,13 +51,14 @@ def split_columns(df_with_id,columns_list,target):
   colum_1 = columns_list.copy()
   colum_1.append(target)
   colum_2 = columns_list.copy()
+  
   # 分割欄位
   client1_data = df_with_id[colum_1]
   client2_data = df_with_id.drop(colum_2, axis=1)
 
   # 切割資料
-  client1_train, client1_test = train_test_split(client1_data, test_size=0.2, random_state=0)
-  client2_train, client2_test = train_test_split(client2_data, test_size=0.2, random_state=0)
+  client1_train, client1_test = train_test_split(client1_data, test_size=0.2)
+  client2_train, client2_test = train_test_split(client2_data, test_size=0.2)
 
 
   # 切割x,y
@@ -243,7 +244,7 @@ original_df =pd.DataFrame(df_norm,columns=original_df.columns)
 
 # choose target
 target='kredit'
-columns_list = ['rate',	'famges',	'buerge',	'wohnzeit',	'verm',	'alter',	'weitkred',	'wohn',	'bishkred',	'beruf'	]
+columns_list = ['rate',	'famges',	'buerge',	'wohnzeit',	'verm',	'alter','laufkont','moral']
 # 添加id
 df_with_id = add_id(original_df)
 # 切割資料
@@ -262,7 +263,7 @@ print(
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 20
+epochs = 50
 num_folds = 5 
 
 # merge train and test data
@@ -359,9 +360,11 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
   epoch_acc = []
 
   for epoch in range(epochs):
+      epoch =1
       print(f'run in {epoch} epoch')
       # epoch=0
       random.shuffle(common_train_index_list_k)
+      print(common_train_index_list_k)
       train_index_batches = [common_train_index_list_k[i:i + batch_size] for i in range(0, len(common_train_index_list_k), batch_size)] 
       total_loss = 0.0
       # Iterate over the batches of the dataset.
