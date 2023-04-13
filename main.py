@@ -243,7 +243,7 @@ original_df =pd.DataFrame(df_norm,columns=original_df.columns)
 
 # choose target
 target='kredit'
-columns_list = ['rate',	'famges',	'buerge',	'wohnzeit',	'verm',	'alter',	'weitkred',	'wohn',	'bishkred',	'beruf'	,'pers'	,'telef',	'gastarb']
+columns_list = ['rate',	'famges',	'buerge',	'wohnzeit',	'verm',	'alter',	'weitkred',	'wohn',	'bishkred',	'beruf'	]
 # 添加id
 df_with_id = add_id(original_df)
 # 切割資料
@@ -405,9 +405,9 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
 
 
   # save result
-  df = df.append({'model':'vfl_cen','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
+  df_result = df_result.append({'model':'vfl','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
   #evalueate
-df.to_csv('vfl_score.csv',index=False)
+df_result.to_csv('vfl_score.csv',index=False)
 #%%
 
 # ----------------------------------centralized----------------------------
