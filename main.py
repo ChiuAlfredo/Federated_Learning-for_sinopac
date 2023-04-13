@@ -25,6 +25,7 @@ import random
 import zipfile
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
+from sklearn.model_selection import KFold
 #%%
 # 分割x and y
 def split_x_y(data_train,data_test,target="kredit"):
@@ -213,7 +214,14 @@ def plot_accuracy(predictions, answers, threshold):
 
 # %%
 # 下載資料
-!wget https://archive.ics.uci.edu/ml/machine-learning-databases/00573/SouthGermanCredit.zip
+
+# detect SouthGermanCredit file is exist or not
+if not os.path.exists('./SouthGermanCredit'):
+  !wget https://archive.ics.uci.edu/ml/machine-learning-databases/00573/SouthGermanCredit.zip
+
+else:
+  print('SouthGermanCredit file is exist')
+  
 with zipfile.ZipFile('SouthGermanCredit.zip', 'r') as zip_ref:
     zip_ref.extractall('./SouthGermanCredit/')
 # %%
@@ -250,6 +258,14 @@ print(
 batch_size = 32
 learning_rate = 1e-3
 epochs = 50
+num_folds = 5 
+
+# merge train and test data
+client1_input = pd.concat((client1_train_x,client1_test_x),axis=0)
+client2_input = pd.concat((client2_train_x,client2_test_x),axis=0)
+
+client1_target = np.concatenate((client1_train_y,client1_test_y),axis=0)
+client2_target = np.concatenate((client2_train_y,client2_test_y),axis=0)
 
 # Instantiate an optimizer.
 optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
@@ -258,88 +274,97 @@ optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
 loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 # Instantiate a metric function (accuracy)
 train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
-#%%
-# init client
-normalizer1 = normalize_data(client1_train_x.loc[common_train_index])
-model1 =   tf.keras.Sequential([
-      normalizer1,
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(2),
-      layers.Softmax()])
-client1 = Client(client1_train_x, client1_train_y,client1_test_x,client1_test_y, False,model1)
-
-
-normalizer2 = normalize_data(client2_train_x.loc[common_train_index])
-model2 = tf.keras.Sequential([
-      normalizer2,
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
-      layers.Dropout(0.5),
-      layers.Dense(2),
-      layers.Softmax()])
-client2 = Client(client2_train_x, client2_train_y,client2_test_x,client2_test_y, True,model2)
+# define the kfold cross validation
+kfold = KFold(n_splits=num_folds, shuffle=True)
 
 #%%
-# train_on_client
-common_train_index_list = common_train_index.to_list()
-epoch_loss = []
-epoch_acc = []
+# kfold cross validation evaluation of a model
+fold_no =1
 
-for epoch in range(epochs):
-    print(f'run in {epoch} epoch')
-    # epoch=0
-    random.shuffle(common_train_index_list)
-    train_index_batches = [common_train_index_list[i:i + batch_size] for i in range(0, len(common_train_index_list), batch_size)] 
-    total_loss = 0.0
-    # Iterate over the batches of the dataset.
-    for step, batch_index in enumerate(train_index_batches):
-        
-        partial_grads = client1.next_batch(batch_index)
-        client2.next_batch(batch_index)
+for (cen1_train, cen1_test), (cen2_train, cen2_test) in zip(
+        kfold.split(client1_input, client1_target),
+        kfold.split(client2_input, client2_target)):
+  # init client
+  normalizer1 = normalize_data(client1_train_x.loc[common_train_index])
+  model1 =   tf.keras.Sequential([
+        normalizer1,
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(2),
+        layers.Softmax()])
+  client1 = Client(client1_input[cen1_train], client1_target[cen1_train],client1_input[cen1_test],client1_target[cen1_test], False,model1)
 
-        prob, loss_value = client2.loss_and_update(client1.cal_model())
-        grad = client2.assemble_grad(partial_grads)
-        client1.update_with(grad)
-        
-        total_loss = loss_value + total_loss
-        train_acc_metric.update_state(client2.batch_answers(), prob)
-    train_acc = train_acc_metric.result()
-    print(f'-----train accuracy{train_acc}-----')
-    train_acc_metric.reset_states()
-    epoch_loss.append((total_loss)/(step + 1))
-    epoch_acc.append(train_acc)
 
-plot_loss(epoch_loss, epoch_acc)
+  normalizer2 = normalize_data(client2_train_x.loc[common_train_index])
+  model2 = tf.keras.Sequential([
+        normalizer2,
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(128, activation='elu', kernel_regularizer=regularizers.l2(0.01)),
+        layers.Dropout(0.5),
+        layers.Dense(2),
+        layers.Softmax()])
+  client2 = Client(client2_input[cen2_train], client2_target[cen2_train],client2_input[cen2_test],client2_target[cen2_test], True,model2)
 
-#%%
-# 預測結果
-vfl_pred_test = (client1.predict(common_test_index) + client2.predict(common_test_index))/2
+  #%%
+  # train_on_client
+  common_train_index_list = common_train_index.to_list()
+  epoch_loss = []
+  epoch_acc = []
 
-# 計算roc,auc
-vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index), vfl_pred_test[:,1])
-auc1 = auc(vfl_fpr_test, vfl_tpr_test)
-draw_roc_curve(vfl_fpr_test, vfl_tpr_test,auc1)
-print("AUC: {}".format(auc1 ))
+  for epoch in range(epochs):
+      print(f'run in {epoch} epoch')
+      # epoch=0
+      random.shuffle(common_train_index_list)
+      train_index_batches = [common_train_index_list[i:i + batch_size] for i in range(0, len(common_train_index_list), batch_size)] 
+      total_loss = 0.0
+      # Iterate over the batches of the dataset.
+      for step, batch_index in enumerate(train_index_batches):
+          
+          partial_grads = client1.next_batch(batch_index)
+          client2.next_batch(batch_index)
 
-# 計算threshold 值
-vfl_gmeans_test = np.sqrt(vfl_tpr_test * (1-vfl_fpr_test))
-vfl_ix_test = np.argmax(vfl_gmeans_test)
-best_threshold = vfl_thresholds_test[vfl_ix_test]
-print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vfl_gmeans_test[vfl_ix_test]))
+          prob, loss_value = client2.loss_and_update(client1.cal_model())
+          grad = client2.assemble_grad(partial_grads)
+          client1.update_with(grad)
+          
+          total_loss = loss_value + total_loss
+          train_acc_metric.update_state(client2.batch_answers(), prob)
+      train_acc = train_acc_metric.result()
+      print(f'-----train accuracy{train_acc}-----')
+      train_acc_metric.reset_states()
+      epoch_loss.append((total_loss)/(step + 1))
+      epoch_acc.append(train_acc)
 
-# 準確率
-plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index), best_threshold)
+  plot_loss(epoch_loss, epoch_acc)
 
-# save result
-df=pd.DataFrame(client2.test_answers(common_test_index))
-vfl_pred_test_label = [1 if p >= best_threshold else 0 for p in  vfl_pred_test[:,1]]
-df['predict']=vfl_pred_test_label
-df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
-#evalueate
+  #%%
+  # 預測結果
+  vfl_pred_test = (client1.predict(common_test_index) + client2.predict(common_test_index))/2
+
+  # 計算roc,auc
+  vfl_fpr_test, vfl_tpr_test, vfl_thresholds_test = roc_curve(client2.test_answers(common_test_index), vfl_pred_test[:,1])
+  auc1 = auc(vfl_fpr_test, vfl_tpr_test)
+  draw_roc_curve(vfl_fpr_test, vfl_tpr_test,auc1)
+  print("AUC: {}".format(auc1 ))
+
+  # 計算threshold 值
+  vfl_gmeans_test = np.sqrt(vfl_tpr_test * (1-vfl_fpr_test))
+  vfl_ix_test = np.argmax(vfl_gmeans_test)
+  best_threshold = vfl_thresholds_test[vfl_ix_test]
+  print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vfl_gmeans_test[vfl_ix_test]))
+
+  # 準確率
+  plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index), best_threshold)
+
+  # save result
+  df=pd.DataFrame(client2.test_answers(common_test_index))
+  vfl_pred_test_label = [1 if p >= best_threshold else 0 for p in  vfl_pred_test[:,1]]
+  df['predict']=vfl_pred_test_label
+  df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
+  #evalueate
 
 #%%
 
