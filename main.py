@@ -288,8 +288,8 @@ print(
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 50
-num_folds = 5 
+epochs = 5
+num_folds = 20
 
 # merge train and test data
 client1_input = pd.concat((client1_train_x,client1_test_x),axis=0)
@@ -297,12 +297,16 @@ client2_input = pd.concat((client2_train_x,client2_test_x),axis=0)
 client1_target = pd.concat((client1_train_y,client1_test_y),axis=0)
 client2_target = pd.concat((client2_train_y,client2_test_y),axis=0)
 
-# get index
-client1_input_index = client1_input.index.to_numpy()
-client2_input_index = client2_input.index.to_numpy()
-client1_target_index = client1_target.index.to_numpy()
-client2_target_index = client2_target.index.to_numpy()
+# # get index
+# client1_input_index = client1_input.index.to_numpy()
+# client2_input_index = client2_input.index.to_numpy()
+# client1_target_index = client1_target.index.to_numpy()
+# client2_target_index = client2_target.index.to_numpy()
 
+# common trans to numpy
+common_train_index_k = common_train_index.to_numpy()
+common_test_index = common_test_index.to_numpy()
+cv_common_index = np.concatenate((common_train_index_k,common_test_index),axis=0)
 
 # Instantiate an optimizer.
 optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
@@ -312,29 +316,36 @@ loss_fn = keras.losses.SparseCategoricalCrossentropy(from_logits=False)
 # Instantiate a metric function (accuracy)
 train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 # define the kfold cross validation
-kfold = KFold(n_splits=num_folds, shuffle=True)
+
 
 #%% vfl mode
 # kfold cross validation evaluation of a model
 
 df_result = pd.DataFrame(columns=['model','fold','accuracy','precision','recall','fmeasure'])
-for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index)) in enumerate(zip(
-        kfold.split(client1_input_index, client1_target_index),
-        kfold.split(client2_input_index, client2_target_index))):
+
+fold_size = len(cv_common_index ) // num_folds
+for i in range(num_folds):
+  test_start = i * fold_size
+  test_end = test_start + fold_size
   
-  print(f'------this is {fold} fold------')
+  test_common_index_k = cv_common_index[test_start:test_end]
+  
+  train_common_index_k = np.concatenate((cv_common_index[:test_start], cv_common_index[test_end:]))
+  
+
+  print(f'------this is {i}/{num_folds} fold------')
   # index
-  cen1_train_x_index = client1_input_index[cen1_train_index]
-  cen2_train_x_index = client2_input_index[cen2_train_index]
+  cen1_train_x_index = train_common_index_k
+  cen2_train_x_index = train_common_index_k
   
-  cen1_test_x_index = client1_input_index[cen1_test_index]
-  cen2_test_x_index = client2_input_index[cen2_test_index]
+  cen1_test_x_index = test_common_index_k
+  cen2_test_x_index = test_common_index_k
   
-  cen1_train_y_index = client1_target_index[cen1_train_index]
-  cen2_train_y_index = client2_target_index[cen2_train_index]
+  cen1_train_y_index = train_common_index_k
+  cen2_train_y_index = train_common_index_k
   
-  cen1_test_y_index = client1_target_index[cen1_test_index]
-  cen2_test_y_index = client2_target_index[cen2_test_index]
+  cen1_test_y_index = test_common_index_k
+  cen2_test_y_index = test_common_index_k
   
   
   # define train,test x use index
@@ -389,7 +400,7 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
       print(f'run in {epoch} epoch')
       # epoch=0
       random.shuffle(common_train_index_list_k)
-      print(common_train_index_list_k)
+
       train_index_batches = [common_train_index_list_k[i:i + batch_size] for i in range(0, len(common_train_index_list_k), batch_size)] 
       total_loss = 0.0
       # Iterate over the batches of the dataset.
@@ -433,7 +444,7 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
 
 
   # save result
-  df_result = df_result.append({'model':'vfl','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
+  df_result = df_result.append({'model':'vfl','fold':i,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
   #evalueate
 df_result.to_csv('vfl_score.csv',index=False)
 #%%
