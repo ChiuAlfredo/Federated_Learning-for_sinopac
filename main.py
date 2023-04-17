@@ -288,7 +288,7 @@ print(
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 5
+epochs = 30
 num_folds = 20
 
 # merge train and test data
@@ -456,29 +456,36 @@ df_result.to_csv('vfl_score.csv',index=False)
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 50
+epochs = 30
 
 # Instantiate a metric function (accuracy)
 train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
 
 
 df_result = pd.DataFrame(columns=['model','fold','accuracy','precision','recall','fmeasure'])
-for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_index)) in enumerate(zip(
-        kfold.split(client1_input_index, client1_target_index),
-        kfold.split(client2_input_index, client2_target_index))):
+fold_size = len(cv_common_index ) // num_folds
+for i in range(num_folds):
+  test_start = i * fold_size
+  test_end = test_start + fold_size
   
+  test_common_index_k = cv_common_index[test_start:test_end]
+  
+  train_common_index_k = np.concatenate((cv_common_index[:test_start], cv_common_index[test_end:]))
+  
+
+  print(f'------this is {i}/{num_folds} fold------')
   # index
-  cen1_train_x_index = client1_input_index[cen1_train_index]
-  cen2_train_x_index = client2_input_index[cen2_train_index]
+  cen1_train_x_index = train_common_index_k
+  cen2_train_x_index = train_common_index_k
   
-  cen1_test_x_index = client1_input_index[cen1_test_index]
-  cen2_test_x_index = client2_input_index[cen2_test_index]
+  cen1_test_x_index = test_common_index_k
+  cen2_test_x_index = test_common_index_k
   
-  cen1_train_y_index = client1_target_index[cen1_train_index]
-  cen2_train_y_index = client2_target_index[cen2_train_index]
+  cen1_train_y_index = train_common_index_k
+  cen2_train_y_index = train_common_index_k
   
-  cen1_test_y_index = client1_target_index[cen1_test_index]
-  cen2_test_y_index = client2_target_index[cen2_test_index]
+  cen1_test_y_index = test_common_index_k
+  cen2_test_y_index = test_common_index_k
   
   
   # define train,test x use index
@@ -560,7 +567,7 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
   cen1_pred_test_label = [1 if p >= best_threshold_cen1 else 0 for p in  cen1_pred_test[:,1]]
   # df['predict_cen1']=cen1_pred_test_label
   # df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
-  df_result = df_result.append({'model':'cen1','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
+  df_result = df_result.append({'model':'cen1','fold':i,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
 
 # ---------------init cen_2
   normalizer_cen2 = normalize_data(client2_train_x_k.loc[common_train_index_k])
@@ -623,7 +630,7 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
   cen2_pred_test_label = [1 if p >= best_threshold_cen2 else 0 for p in  cen2_pred_test[:,1]]
   # df['predict_cen2']=cen2_pred_test_label
   # df.to_csv('vfl_cen_predict.csv',encoding ='UTF-8-sig')
-  df_result = df_result.append({'model':'cen2','fold':fold,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
+  df_result = df_result.append({'model':'cen2','fold':i,'accuracy':accuracy,'precision':precision,'recall':recall,'fmeasure':fmeasure},ignore_index=True)
 
 df_result.to_csv('cen12_score.csv',encoding ='UTF-8-sig')
 # %%
