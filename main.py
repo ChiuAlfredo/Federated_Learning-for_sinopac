@@ -47,20 +47,44 @@ def add_id(original_df):
 
   return df_with_id
 
+# def split_columns(df_with_id,columns_list,target):
+#   colum_1 = columns_list.copy()
+#   colum_1.append(target)
+#   colum_2 = columns_list.copy()
+  
+#   # 分割欄位
+#   client1_data = df_with_id[colum_1]
+#   client2_data = df_with_id.drop(colum_2, axis=1)
+
+#   # 切割資料
+#   client1_train, client1_test = train_test_split(client1_data, test_size=0.2)
+#   client2_train, client2_test = train_test_split(client2_data, test_size=0.2)
+
+#   # 切割x,y
+#   client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test,target)
+#   client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test,target)
+
+#   # 找出共同的index
+#   common_train_index = client1_train.index.intersection(client2_train.index)
+#   common_test_index = client1_test.index.intersection(client2_test.index)
+
+#   return client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x,client2_train_y, client2_test_x, client2_test_y, common_train_index, common_test_index
 def split_columns(df_with_id,columns_list,target):
   colum_1 = columns_list.copy()
   colum_1.append(target)
   colum_2 = columns_list.copy()
   
+  # 分割資料
+  train_data, test_data = train_test_split(df_with_id, test_size=0.2)
+  
   # 分割欄位
-  client1_data = df_with_id[colum_1]
-  client2_data = df_with_id.drop(colum_2, axis=1)
+  client1_train = train_data[colum_1]
+  client1_test = test_data[colum_1]
+  
+  client2_train = train_data.drop(colum_2, axis=1)
 
-  # 切割資料
-  client1_train, client1_test = train_test_split(client1_data, test_size=0.2)
-  client2_train, client2_test = train_test_split(client2_data, test_size=0.2)
-
-
+  client2_test = test_data.drop(colum_2, axis=1)
+  
   # 切割x,y
   client1_train_x,client1_train_y, client1_test_x, client1_test_y = split_x_y(client1_train,client1_test,target)
   client2_train_x,client2_train_y, client2_test_x, client2_test_y = split_x_y(client2_train,client2_test,target)
@@ -70,6 +94,7 @@ def split_columns(df_with_id,columns_list,target):
   common_test_index = client1_test.index.intersection(client2_test.index)
 
   return client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x,client2_train_y, client2_test_x, client2_test_y, common_train_index, common_test_index
+  
 #%%
 # model
 # normalize data
@@ -360,7 +385,7 @@ for fold,((cen1_train_index, cen1_test_index), (cen2_train_index, cen2_test_inde
   epoch_acc = []
 
   for epoch in range(epochs):
-      epoch =1
+
       print(f'run in {epoch} epoch')
       # epoch=0
       random.shuffle(common_train_index_list_k)
@@ -420,7 +445,7 @@ df_result.to_csv('vfl_score.csv',index=False)
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 20
+epochs = 50
 
 # Instantiate a metric function (accuracy)
 train_acc_metric = tf.keras.metrics.SparseCategoricalAccuracy()
