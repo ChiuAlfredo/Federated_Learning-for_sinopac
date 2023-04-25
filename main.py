@@ -188,6 +188,7 @@ class Client:
 # 畫圖
 # roc curve
 def draw_roc_curve(fpr, tpr,auc):
+  plt.ioff()
   fig, ax = plt.subplots()
   plt.title('Receiver Operating Characteristic')
   plt.plot(fpr, tpr, color = 'orange', label = 'AUC = %0.2f' % auc)
@@ -197,11 +198,14 @@ def draw_roc_curve(fpr, tpr,auc):
   plt.ylim([0, 1])
   plt.ylabel('True Positive Rate')
   plt.xlabel('False Positive Rate')
-  plt.show()  
+  plt.show(block=False)
+  plt.pause(0.01)
+  plt.close()
 
 
 # 訓練圖
 def plot_loss(loss, accuracy):
+  plt.ioff()
   fig, ax = plt.subplots()
   plt.plot(loss, label='loss')
   plt.plot(accuracy, label='accuracy')
@@ -209,6 +213,10 @@ def plot_loss(loss, accuracy):
   # plt.ylabel('Error')
   plt.legend()
   plt.grid(True)
+  
+  plt.show(block=False)
+  plt.pause(0.01)
+  plt.close()
 
 # 準確率圖
 def plot_accuracy(predictions, answers, threshold):
@@ -283,19 +291,23 @@ client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x
 #         len(client1_train_x),
 #         len(common_test_index),
 #         len(client1_test_x)))
-
-print('-------------clinet1----------------')
+print('\n\n\n')
+print('---------------------------------show 2 client data-------------------------')
+print('-------------------------------clinet1----------------')
 print(client1_train_x.head())
-print('-------------clinet2----------------')
+print('-------------------------------clinet2----------------')
 print(client2_train_x.head())
 
+time.sleep(5)
+print('\n\n\n')
+print('-------------------------------------starting independent training-----------------------------------')
 # ----------------------------------centralized----------------------------
 
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
 epochs = 2
-num_folds = 2
+num_folds = 20
 
 # merge train and test data
 client1_input = pd.concat((client1_train_x,client1_test_x),axis=0)
@@ -338,8 +350,8 @@ for i in range(num_folds):
   
   train_common_index_k = np.concatenate((cv_common_index[:test_start], cv_common_index[test_end:]))
   
-
-  print(f'------this is {i}/{num_folds} fold------')
+  print('\n')
+  print(f'----------------this is {i}/{num_folds} fold-----------------')
   # index
   cen1_train_x_index = train_common_index_k
   cen2_train_x_index = train_common_index_k
@@ -390,6 +402,7 @@ for i in range(num_folds):
       def on_epoch_end(self, epoch, logs=None):
           epoch_loss.append(logs["loss"])
           epoch_acc.append(logs["accuracy"])
+          print('\n')
           print(f'Epoch {epoch+1}: Loss={logs["loss"]:.4f}, Accuracy={logs["accuracy"]:.4f}')
 
 
@@ -405,7 +418,7 @@ for i in range(num_folds):
 
   #evaluate
   test_loss, test_acc = model_cen1.evaluate(client1_test_x_k, client1_test_y_k, verbose=2)
-  print('\nTest accuracy:', test_acc)
+  print('\n\n\nTest accuracy:', test_acc)
 
 
   # result
@@ -500,6 +513,11 @@ for i in range(num_folds):
 
 df_cen_result.to_csv('cen12_score.csv',encoding ='UTF-8-sig')
 # %%
+time.sleep(10)
+
+print('\n\n\n\n\n\n')
+print('---------------------------starting vfl------------------------------')
+#vfl
 
 # Instantiate an optimizer.
 optimizer=tf.keras.optimizers.legacy.Adam(learning_rate=learning_rate)
@@ -526,7 +544,8 @@ for i in range(num_folds):
   train_common_index_k = np.concatenate((cv_common_index[:test_start], cv_common_index[test_end:]))
   
 
-  print(f'------this is {i}/{num_folds} fold------')
+  print(f'training start')
+  print(f'-----------------this is {i}/{num_folds} fold------------')
   # index
   cen1_train_x_index = train_common_index_k
   cen2_train_x_index = train_common_index_k
@@ -590,7 +609,7 @@ for i in range(num_folds):
 
   for epoch in range(epochs):
 
-      print(f'run in {epoch} epoch')
+      print(f'---------------------------run in {epoch} epoch----------------------------')
       # epoch=0
       random.shuffle(common_train_index_list_k)
 
@@ -630,7 +649,7 @@ for i in range(num_folds):
   vfl_ix_test = np.argmax(vfl_gmeans_test)
   best_threshold = vfl_thresholds_test[vfl_ix_test]
   print('Best Threshold=%f, G-Mean=%.3f\n' % (vfl_thresholds_test[vfl_ix_test], vfl_gmeans_test[vfl_ix_test]))
-
+  print('\n\n\n')
   # 準確率
 
   accuracy, precision, recall, fmeasure=plot_accuracy(vfl_pred_test, client2.test_answers(common_test_index_k), best_threshold)
@@ -643,6 +662,10 @@ df_vfl_result.to_csv('vfl_score.csv',index=False)
 
 
 #%%
+
+time.sleep(10)
+print('\n\n\n')
+print('--------------------------------show result---------------------------------')
 # cen1 accu mean
 cen1_acc_avg = df_cen_result[df_cen_result['model'] == 'cen1']['accuracy'].mean()
 
@@ -656,12 +679,15 @@ print('cen1 accu mean:',0.7043)
 print('cen2 accu mean:',0.7134)
 print('vfl accu mean:',0.8022)
 
-time.sleep(10)
+
 
 #%%
+time.sleep(10)
 # 模型傳遞的參數
-print('傳遞資料的參數')
-time.slepp()
-print(partial_grads) 
+print('\n\n\n\n\n\n')
+print('-------------------------------傳遞模型的參數------------------------------')
+print('------------------------------沒有任何客戶資料----------------------------------')
+time.sleep(2)
+print(partial_grads[1]) 
 
 # %%
