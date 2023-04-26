@@ -199,7 +199,7 @@ def draw_roc_curve(fpr, tpr,auc):
   plt.ylabel('True Positive Rate')
   plt.xlabel('False Positive Rate')
   plt.show(block=False)
-  plt.pause(0.01)
+  plt.pause(0.5)
   plt.close()
 
 
@@ -215,7 +215,7 @@ def plot_loss(loss, accuracy):
   plt.grid(True)
   
   plt.show(block=False)
-  plt.pause(0.01)
+  plt.pause(0.5)
   plt.close()
 
 # 準確率圖
@@ -291,23 +291,26 @@ client1_train_x,client1_train_y, client1_test_x, client1_test_y, client2_train_x
 #         len(client1_train_x),
 #         len(common_test_index),
 #         len(client1_test_x)))
-print('\n\n\n')
+print('\n')
 print('---------------------------------show 2 client data-------------------------')
 print('-------------------------------clinet1----------------')
 print(client1_train_x.head())
+client1_train_x.to_excel('client1_train.xlsx')
 print('-------------------------------clinet2----------------')
 print(client2_train_x.head())
+client2_train_x.to_excel('client2_train.xlsx')
 
 time.sleep(5)
 print('\n\n\n')
 print('-------------------------------------starting independent training-----------------------------------')
+print('\n\n\n\n\n\n\n\n\n')
 # ----------------------------------centralized----------------------------
 
 # 設定參數
 batch_size = 32
 learning_rate = 1e-3
-epochs = 2
-num_folds = 20
+epochs = 20
+num_folds = 2
 
 # merge train and test data
 client1_input = pd.concat((client1_train_x,client1_test_x),axis=0)
@@ -517,6 +520,7 @@ time.sleep(10)
 
 print('\n\n\n\n\n\n')
 print('---------------------------starting vfl------------------------------')
+print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
 #vfl
 
 # Instantiate an optimizer.
@@ -666,6 +670,7 @@ df_vfl_result.to_csv('vfl_score.csv',index=False)
 time.sleep(10)
 print('\n\n\n')
 print('--------------------------------show result---------------------------------')
+print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
 # cen1 accu mean
 cen1_acc_avg = df_cen_result[df_cen_result['model'] == 'cen1']['accuracy'].mean()
 
@@ -678,7 +683,7 @@ vfl_acc_avg = df_vfl_result[df_vfl_result['model'] == 'vfl']['accuracy'].mean()
 print('cen1 accu mean:',0.7043)
 print('cen2 accu mean:',0.7134)
 print('vfl accu mean:',0.8022)
-
+print('\n\n\n\n\n\n\n\n')
 
 
 #%%
@@ -687,6 +692,7 @@ time.sleep(10)
 print('\n\n\n\n\n\n')
 print('-------------------------------傳遞模型的參數------------------------------')
 print('------------------------------沒有任何客戶資料----------------------------------')
+print('\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n')
 time.sleep(2)
 print(partial_grads[1]) 
 
